@@ -1,108 +1,380 @@
-# FUNCTION DOCUMENT
+# SMART HOME SECURITY SYSTEM
 
-## Smart Home Security System
+## FUNCTION DOCUMENT & CODE CONVENTION
 
-## 1. Thành viên 1 - ESP32-CAM và phần cứng
-
-### File: esp32cam.cpp / esp32cam.h
-
-| Hàm                     | Tham số | Trả về | Chức năng                 |
-| ----------------------- | ------- | ------ | ------------------------- |
-| initHardware()          | Không   | void   | Khởi tạo PIR, buzzer, LED |
-| initCamera()            | Không   | bool   | Khởi tạo ESP32-CAM        |
-| detectMotion()          | Không   | bool   | Kiểm tra PIR              |
-| captureImage()          | Không   | String | Chụp ảnh                  |
-| sendImage(imagePath)    | String  | bool   | Gửi ảnh lên laptop        |
-| turnOnBuzzer()          | Không   | void   | Bật còi                   |
-| turnOffBuzzer()         | Không   | void   | Tắt còi                   |
-| turnOnLED()             | Không   | void   | Bật LED                   |
-| turnOffLED()            | Không   | void   | Tắt LED                   |
-| receiveCommand(command) | String  | void   | Nhận lệnh từ laptop       |
-
-Biến:
-
-* motionDetected
-* buzzerState
-* ledState
-* capturedImagePath
+### Môn học: Cơ sở đo lường
 
 ---
 
-## 2. Thành viên 2 - AI xử lý ảnh
+# 1. MỤC ĐÍCH
 
-### File: detect_face.py
-
-| Hàm                    | Tham số | Trả về | Chức năng             |
-| ---------------------- | ------- | ------ | --------------------- |
-| loadKnownFaces()       | Không   | bool   | Tải dữ liệu khuôn mặt |
-| detectFaces(image)     | image   | list   | Phát hiện khuôn mặt   |
-| recognizeFace(image)   | image   | String | Nhận diện             |
-| classifyPerson(result) | String  | String | known/unknown         |
-| processImage(image)    | image   | String | Xử lý toàn bộ ảnh     |
-
-Biến:
-
-* knownFaces
-* detectedFaces
-* recognitionResult
-* personStatus
+* Thống nhất cấu trúc code của cả nhóm.
+* Thống nhất tên file, tên hàm và tên biến.
+* Mỗi thành viên code độc lập theo đúng tài liệu này.
+* Khi tích hợp hệ thống chỉ cần gọi các hàm trong file `main`.
+* Nếu thay đổi tên hàm hoặc tham số phải cập nhật lại tài liệu này trước khi code.
 
 ---
 
-## 3. Thành viên 3 - MQTT và Dashboard
+# 2. CẤU TRÚC GITHUB
 
-### File: mqtt_client.py, dashboard.py
-
-| Hàm                           | Tham số       | Trả về | Chức năng          |
-| ----------------------------- | ------------- | ------ | ------------------ |
-| connectBroker()               | Không         | bool   | Kết nối Broker     |
-| subscribeTopics()             | Không         | void   | Subscribe topic    |
-| publishMessage(topic,message) | String,String | bool   | Publish MQTT       |
-| handleMessage(topic,message)  | String,String | void   | Xử lý dữ liệu nhận |
-| publishCommand(command)       | String        | bool   | Gửi lệnh           |
-| updateDashboard(data)         | data          | void   | Cập nhật dashboard |
-
-MQTT Topics:
-
-* home/motion
-* home/image
-* home/recognition
-* home/alarm
-* home/command
-* home/status
+```text
+Smart-Home-Security-System/
+│
+├── README.md
+├── docs/
+├── esp32cam/
+├── ai/
+├── mqtt_dashboard/
+├── voice_ota/
+├── config/
+└── main/
+```
 
 ---
 
-## 4. Thành viên 4 - Voice Control và OTA
+# 3. THÀNH VIÊN 1 – ĐĂNG LÊ
 
-### File: voice_control.py, system_manager.py
+## ESP32-CAM + PHẦN CỨNG
 
-| Hàm                           | Tham số | Trả về | Chức năng         |
-| ----------------------------- | ------- | ------ | ----------------- |
-| listenCommand()               | Không   | String | Nhận giọng nói    |
-| processVoiceCommand(command)  | String  | String | Xử lý lệnh        |
-| executeSystemCommand(command) | String  | bool   | Thực thi lệnh     |
-| getSystemStatus()             | Không   | String | Lấy trạng thái    |
-| systemWorkflow()              | Không   | void   | Mô phỏng hệ thống |
-| checkOTAUpdate()              | Không   | bool   | Kiểm tra OTA      |
+### Thư mục
+
+```text
+esp32cam/
+```
+
+### File
+
+```text
+esp32cam.h
+esp32cam.cpp
+camera_config.h
+```
+
+### Biến
+
+```text
+motionDetected
+buzzerState
+ledState
+capturedImagePath
+receivedCommand
+wifiConnected
+mqttConnected
+```
+
+### Hàm
+
+| Hàm                         | Tham số | Trả về | Chức năng                  |
+| --------------------------- | ------- | ------ | -------------------------- |
+| connectWiFi()               | Không   | bool   | Kết nối WiFi               |
+| connectMQTT()               | Không   | bool   | Kết nối MQTT Broker        |
+| reconnectMQTT()             | Không   | void   | Kết nối lại MQTT           |
+| initHardware()              | Không   | void   | Khởi tạo PIR, buzzer, LED  |
+| initCamera()                | Không   | bool   | Khởi tạo ESP32-CAM         |
+| detectMotion()              | Không   | bool   | Kiểm tra PIR               |
+| captureImage()              | Không   | String | Chụp ảnh                   |
+| sendImage(imagePath)        | String  | bool   | Gửi ảnh lên laptop         |
+| publishMotionStatus(status) | bool    | void   | Gửi trạng thái chuyển động |
+| turnOnBuzzer()              | Không   | void   | Bật buzzer                 |
+| turnOffBuzzer()             | Không   | void   | Tắt buzzer                 |
+| turnOnLED()                 | Không   | void   | Bật LED                    |
+| turnOffLED()                | Không   | void   | Tắt LED                    |
+| receiveCommand(command)     | String  | void   | Nhận lệnh từ laptop        |
+| executeCommand(command)     | String  | void   | Thực thi lệnh              |
 
 ---
 
-## File main.ino
+# 4. THÀNH VIÊN 2
 
-setup():
+## AI XỬ LÝ ẢNH
 
-* initHardware()
-* initCamera()
-* connectBroker()
+### Thư mục
 
-loop():
+```text
+ai/
+```
 
-* detectMotion()
-* captureImage()
-* sendImage()
-* receiveCommand()
+### File
+
+```text
+detect_face.py
+face_database.py
+image_processor.py
+```
+
+### Biến
+
+```text
+knownFaces
+faceEncodings
+detectedFaces
+recognitionResult
+personStatus
+imageData
+```
+
+### Hàm
+
+| Hàm                            | Tham số       | Trả về | Chức năng               |
+| ------------------------------ | ------------- | ------ | ----------------------- |
+| loadKnownFaces()               | Không         | bool   | Tải dữ liệu khuôn mặt   |
+| detectFaces(image)             | image         | list   | Phát hiện khuôn mặt     |
+| recognizeFace(image)           | image         | String | Nhận diện khuôn mặt     |
+| classifyPerson(result)         | String        | String | Phân loại known/unknown |
+| processImage(image)            | image         | String | Xử lý toàn bộ ảnh       |
+| saveNewFace(personName, image) | String, image | void   | Lưu khuôn mặt mới       |
+| removeKnownFace(personName)    | String        | bool   | Xóa khuôn mặt           |
+| countDetectedFaces(image)      | image         | int    | Đếm số khuôn mặt        |
+| saveRecognitionLog(status)     | String        | bool   | Lưu lịch sử nhận diện   |
+
+### Giá trị trả về
+
+```text
+known
+unknown
+```
 
 ---
 
-Nếu thay đổi tên hàm hoặc tham số, cập nhật trực tiếp vào tài liệu này trước khi code.
+# 5. THÀNH VIÊN 3
+
+## MQTT + DASHBOARD
+
+### Thư mục
+
+```text
+mqtt_dashboard/
+```
+
+### File
+
+```text
+mqtt_client.py
+dashboard.py
+topics.py
+```
+
+### Biến
+
+```text
+mqttClient
+brokerAddress
+motionStatus
+alarmStatus
+recognitionStatus
+dashboardData
+receivedMessage
+deviceStatus
+```
+
+### Hàm
+
+| Hàm                            | Tham số        | Trả về | Chức năng                    |
+| ------------------------------ | -------------- | ------ | ---------------------------- |
+| connectBroker()                | Không          | bool   | Kết nối Broker               |
+| disconnectBroker()             | Không          | void   | Ngắt kết nối Broker          |
+| subscribeTopics()              | Không          | void   | Subscribe các topic          |
+| publishMessage(topic, message) | String, String | bool   | Publish MQTT                 |
+| handleMessage(topic, message)  | String, String | void   | Xử lý dữ liệu nhận           |
+| publishCommand(command)        | String         | bool   | Gửi lệnh xuống ESP32         |
+| updateDashboard(data)          | data           | void   | Cập nhật dashboard           |
+| showMotionStatus(status)       | bool           | void   | Hiển thị chuyển động         |
+| showRecognitionStatus(status)  | String         | void   | Hiển thị người quen/người lạ |
+| showAlarmStatus(status)        | bool           | void   | Hiển thị trạng thái cảnh báo |
+| showDeviceStatus(data)         | data           | void   | Hiển thị trạng thái thiết bị |
+| getCurrentStatus()             | Không          | String | Lấy trạng thái hiện tại      |
+| startDashboard()               | Không          | void   | Khởi động dashboard          |
+
+### MQTT Topics
+
+```text
+home/motion
+home/image
+home/recognition
+home/alarm
+home/command
+home/status
+```
+
+---
+
+# 6. THÀNH VIÊN 4
+
+## VOICE CONTROL + OTA + TỔNG HỢP HỆ THỐNG
+
+### Thư mục
+
+```text
+voice_ota/
+```
+
+### File
+
+```text
+voice_control.py
+ota_manager.py
+system_manager.py
+```
+
+### Biến
+
+```text
+voiceCommand
+systemStatus
+workflowStatus
+otaStatus
+processedCommand
+```
+
+### Hàm
+
+| Hàm                           | Tham số | Trả về | Chức năng                |
+| ----------------------------- | ------- | ------ | ------------------------ |
+| listenCommand()               | Không   | String | Nhận lệnh giọng nói      |
+| processVoiceCommand(command)  | String  | String | Xử lý lệnh giọng nói     |
+| executeSystemCommand(command) | String  | bool   | Thực thi lệnh            |
+| getSystemStatus()             | Không   | String | Lấy trạng thái hệ thống  |
+| systemWorkflow()              | Không   | void   | Mô phỏng luồng hoạt động |
+| checkOTAUpdate()              | Không   | bool   | Kiểm tra OTA             |
+| startOTAUpdate()              | Không   | bool   | Bắt đầu OTA              |
+| notifyOTAResult(result)       | bool    | void   | Thông báo kết quả OTA    |
+
+### Lệnh giọng nói
+
+```text
+Bật cảnh báo
+Tắt cảnh báo
+Kiểm tra trạng thái
+Bật còi
+Tắt còi
+Bật LED
+Tắt LED
+```
+
+---
+
+# 7. CONFIG DÙNG CHUNG
+
+### Thư mục
+
+```text
+config/
+```
+
+### File
+
+```text
+config.h
+config.py
+```
+
+### Biến
+
+```text
+WIFI_SSID
+WIFI_PASSWORD
+MQTT_SERVER
+MQTT_PORT
+PIR_PIN
+BUZZER_PIN
+LED_PIN
+```
+
+---
+
+# 8. FILE MAIN
+
+### Thư mục
+
+```text
+main/
+```
+
+### File
+
+```text
+main.ino
+```
+
+### Chức năng
+
+Chỉ dùng để gọi các module đã thống nhất.
+
+### setup()
+
+```cpp
+connectWiFi();
+connectMQTT();
+initHardware();
+initCamera();
+```
+
+### loop()
+
+```cpp
+if (detectMotion()) {
+    String imagePath = captureImage();
+    sendImage(imagePath);
+}
+
+receiveCommand();
+```
+
+---
+
+# 9. QUY ƯỚC ĐẶT TÊN
+
+## Tên file
+
+* Viết thường.
+* Dùng dấu gạch dưới (_).
+
+Ví dụ:
+
+```text
+detect_face.py
+mqtt_client.py
+voice_control.py
+```
+
+## Tên hàm
+
+* Dùng camelCase.
+
+Ví dụ:
+
+```text
+detectMotion()
+processImage()
+publishMessage()
+```
+
+## Tên biến
+
+* Dùng camelCase.
+
+Ví dụ:
+
+```text
+motionDetected
+knownFaces
+alarmStatus
+```
+
+---
+
+# 10. QUY ĐỊNH LÀM VIỆC
+
+* Mỗi người chỉ sửa thư mục của mình.
+* Mọi thay đổi về tên hàm phải cập nhật vào tài liệu này.
+* Các thành viên khác khi gọi hàm phải kiểm tra lại tài liệu trước.
+* TV2, TV3 và TV4 được giả định đã nhận được dữ liệu đầu vào để xử lý.```
+PIR
+→ ESP32-CAM
+→ MQTT
+→ AI
+→ Dashboard
+→ Quyết định cảnh báo
+→ ESP32 bật/tắt buzzer và LED
+```
