@@ -1,0 +1,12 @@
+{
+  "name": "smart-home-security-system",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start:ota-server": "node ota_control/mock_ota_server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "multer": "^1.4.5-lts.1"
+  }
+}
