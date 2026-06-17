@@ -1,231 +1,434 @@
-#include <Arduino.h>
-
 #include "esp32cam.h"
 
-#include <HTTPClient.h>
+#include <WiFi.h>
 #include <PubSubClient.h>
-#include <Update.h>
-#include <WiFiClient.h>
 
-const char *OTA_COMMAND_TOPIC = "home/system/ota";
-const char *OTA_STATUS_TOPIC = "home/system/ota/status";
+#include "board_config.h"
+#include "project_config.h"
+#include "ota_update.h"
 
-namespace {
-PubSubClient *g_mqttClient = nullptr;
-OtaTaskCallback g_onPauseTasks = nullptr;
-OtaTaskCallback g_onResumeTasks = nullptr;
+void startCameraServer();
+void setupLedFlash();
 
-void publishOtaStatus(const char *stage, int progress, const String &message) {
-	if (g_mqttClient == nullptr) {
-		return;
-	}
+static WiFiClient wifiClient;
+static PubSubClient mqttClient(wifiClient);
 
-	String payload = "{\"stage\":\"";
-	payload += stage;
-	payload += "\",\"progress\":";
-	payload += progress;
-	payload += ",\"message\":\"";
-	payload += message;
-	payload += "\"}";
+static bool ledState = false;
+static bool buzzerState = false;
+static String receivedCommand;
 
-	g_mqttClient->publish(OTA_STATUS_TOPIC, payload.c_str(), true);
+void initHardware() {
+  pinMode(PIR_PIN, INPUT);
+  pinMode(LED_PIN, OUTPUT);
+  pinMode(BUZZER_PIN, OUTPUT);
+
+  digitalWrite(LED_PIN, LOW);
+  digitalWrite(BUZZER_PIN, LOW);
+
+  ledState = false;
+  buzzerState = false;
+
+  Serial.println("Da khoi tao PIR, LED va buzzer");
 }
 
-String extractJsonStringField(const String &json, const char *key) {
-	String quotedKey = "\"";
-	quotedKey += key;
-	quotedKey += "\"";
+bool initCamera() {
+  camera_config_t config = {};
 
-	int keyPos = json.indexOf(quotedKey);
-	if (keyPos < 0) {
-		return "";
-	}
+  config.ledc_channel = LEDC_CHANNEL_0;
+  config.ledc_timer = LEDC_TIMER_0;
 
-	int colonPos = json.indexOf(':', keyPos + quotedKey.length());
-	if (colonPos < 0) {
-		return "";
-	}
+  config.pin_d0 = Y2_GPIO_NUM;
+  config.pin_d1 = Y3_GPIO_NUM;
+  config.pin_d2 = Y4_GPIO_NUM;
+  config.pin_d3 = Y5_GPIO_NUM;
+  config.pin_d4 = Y6_GPIO_NUM;
+  config.pin_d5 = Y7_GPIO_NUM;
+  config.pin_d6 = Y8_GPIO_NUM;
+  config.pin_d7 = Y9_GPIO_NUM;
 
-	int startQuote = json.indexOf('"', colonPos + 1);
-	if (startQuote < 0) {
-		return "";
-	}
+  config.pin_xclk = XCLK_GPIO_NUM;
+  config.pin_pclk = PCLK_GPIO_NUM;
+  config.pin_vsync = VSYNC_GPIO_NUM;
+  config.pin_href = HREF_GPIO_NUM;
 
-	int endQuote = json.indexOf('"', startQuote + 1);
-	if (endQuote < 0) {
-		return "";
-	}
+  config.pin_sccb_sda = SIOD_GPIO_NUM;
+  config.pin_sccb_scl = SIOC_GPIO_NUM;
 
-	return json.substring(startQuote + 1, endQuote);
-}
-} // namespace
+  config.pin_pwdn = PWDN_GPIO_NUM;
+  config.pin_reset = RESET_GPIO_NUM;
 
-void otaInit(PubSubClient *mqttClient) {
-	g_mqttClient = mqttClient;
-}
+  config.xclk_freq_hz = 20000000;
+  config.frame_size = FRAMESIZE_UXGA;
+  config.pixel_format = PIXFORMAT_JPEG;
+  config.grab_mode = CAMERA_GRAB_WHEN_EMPTY;
+  config.fb_location = CAMERA_FB_IN_PSRAM;
+  config.jpeg_quality = 12;
+  config.fb_count = 1;
 
-void otaSetTaskControlCallbacks(OtaTaskCallback onPause, OtaTaskCallback onResume) {
-	g_onPauseTasks = onPause;
-	g_onResumeTasks = onResume;
-}
+  if (psramFound()) {
+    config.jpeg_quality = 10;
+    config.fb_count = 2;
+    config.grab_mode = CAMERA_GRAB_LATEST;
+  } else {
+    config.frame_size = FRAMESIZE_SVGA;
+    config.fb_location = CAMERA_FB_IN_DRAM;
+  }
 
-bool performOTA(const String &fileUrl, const String &expectedMd5) {
-	if (!fileUrl.startsWith("http://") && !fileUrl.startsWith("https://")) {
-		publishOtaStatus("error", 0, "URL OTA khong hop le");
-		return false;
-	}
+#if defined(CAMERA_MODEL_ESP_EYE)
+  pinMode(13, INPUT_PULLUP);
+  pinMode(14, INPUT_PULLUP);
+#endif
 
-	// B1: Giai phong RAM bang cach tam dung cac task nang (camera/stream/AI).
-	if (g_onPauseTasks != nullptr) {
-		g_onPauseTasks();
-	}
+  const esp_err_t error = esp_camera_init(&config);
 
-	publishOtaStatus("downloading", 0, "Bat dau OTA qua HTTP");
+  if (error != ESP_OK) {
+    Serial.printf("Khoi tao camera that bai, ma loi: 0x%x\n", error);
+    return false;
+  }
 
-	HTTPClient http;
-	WiFiClient netClient;
+  sensor_t *sensor = esp_camera_sensor_get();
 
-	if (!http.begin(netClient, fileUrl)) {
-		publishOtaStatus("error", 0, "Khong khoi tao duoc HTTPClient");
-		if (g_onResumeTasks != nullptr) {
-			g_onResumeTasks();
-		}
-		return false;
-	}
+  if (sensor == nullptr) {
+    Serial.println("Khong lay duoc camera sensor");
+    return false;
+  }
 
-	int httpCode = http.GET();
-	if (httpCode != HTTP_CODE_OK) {
-		String err = "HTTP loi: ";
-		err += httpCode;
-		publishOtaStatus("error", 0, err);
-		http.end();
-		if (g_onResumeTasks != nullptr) {
-			g_onResumeTasks();
-		}
-		return false;
-	}
+  if (sensor->id.PID == OV3660_PID) {
+    sensor->set_vflip(sensor, 1);
+    sensor->set_brightness(sensor, 1);
+    sensor->set_saturation(sensor, -2);
+  }
 
-	int contentLength = http.getSize();
-	if (contentLength <= 0) {
-		publishOtaStatus("error", 0, "Khong lay duoc kich thuoc firmware");
-		http.end();
-		if (g_onResumeTasks != nullptr) {
-			g_onResumeTasks();
-		}
-		return false;
-	}
+  sensor->set_framesize(sensor, FRAMESIZE_QVGA);
 
-	if (!Update.begin(contentLength)) {
-		String err = "Update.begin loi: ";
-		err += Update.errorString();
-		publishOtaStatus("error", 0, err);
-		http.end();
-		if (g_onResumeTasks != nullptr) {
-			g_onResumeTasks();
-		}
-		return false;
-	}
+#if defined(CAMERA_MODEL_M5STACK_WIDE) || defined(CAMERA_MODEL_M5STACK_ESP32CAM)
+  sensor->set_vflip(sensor, 1);
+  sensor->set_hmirror(sensor, 1);
+#endif
 
-	// B2: Neu server gui checksum MD5 thi bat xac minh toan ven firmware.
-	if (expectedMd5.length() == 32) {
-		if (!Update.setMD5(expectedMd5.c_str())) {
-			publishOtaStatus("error", 0, "Khong set duoc MD5");
-			Update.abort();
-			http.end();
-			if (g_onResumeTasks != nullptr) {
-				g_onResumeTasks();
-			}
-			return false;
-		}
-	}
+#if defined(CAMERA_MODEL_ESP32S3_EYE)
+  sensor->set_vflip(sensor, 1);
+#endif
 
-	WiFiClient *stream = http.getStreamPtr();
-	uint8_t buffer[1024];
-	size_t totalWritten = 0;
-	int lastProgress = -1;
+#if defined(LED_GPIO_NUM)
+  setupLedFlash();
+#endif
 
-	while (http.connected() && totalWritten < static_cast<size_t>(contentLength)) {
-		size_t available = stream->available();
-		if (available == 0) {
-			delay(5);
-			continue;
-		}
-
-		size_t readLen = stream->readBytes(buffer, min(available, sizeof(buffer)));
-		if (readLen == 0) {
-			continue;
-		}
-
-		size_t written = Update.write(buffer, readLen);
-		if (written != readLen) {
-			String err = "Ghi flash loi: ";
-			err += Update.errorString();
-			publishOtaStatus("error", lastProgress < 0 ? 0 : lastProgress, err);
-			Update.abort();
-			http.end();
-			if (g_onResumeTasks != nullptr) {
-				g_onResumeTasks();
-			}
-			return false;
-		}
-
-		totalWritten += written;
-		int progress = static_cast<int>((totalWritten * 100) / contentLength);
-		if (progress > 100) {
-			progress = 100;
-		}
-
-		if (progress != lastProgress) {
-			lastProgress = progress;
-			publishOtaStatus("downloading", progress, "Dang cap nhat firmware");
-		}
-	}
-
-	if (!Update.end(true)) {
-		String err = "Update.end loi: ";
-		err += Update.errorString();
-		publishOtaStatus("error", lastProgress < 0 ? 0 : lastProgress, err);
-		http.end();
-		if (g_onResumeTasks != nullptr) {
-			g_onResumeTasks();
-		}
-		return false;
-	}
-
-	if (!Update.isFinished()) {
-		publishOtaStatus("error", 100, "Firmware chua ghi xong");
-		http.end();
-		if (g_onResumeTasks != nullptr) {
-			g_onResumeTasks();
-		}
-		return false;
-	}
-
-	http.end();
-	publishOtaStatus("success", 100, "OTA thanh cong, dang khoi dong lai");
-	delay(1500);
-	ESP.restart();
-	return true;
+  Serial.println("Khoi tao camera thanh cong");
+  return true;
 }
 
-void otaHandleMqttMessage(const char *topic, const uint8_t *payload, unsigned int length) {
-	if (strcmp(topic, OTA_COMMAND_TOPIC) != 0) {
-		return;
-	}
+bool connectWiFi() {
+  if (WiFi.status() == WL_CONNECTED) {
+    return true;
+  }
 
-	String body;
-	body.reserve(length);
-	for (unsigned int i = 0; i < length; ++i) {
-		body += static_cast<char>(payload[i]);
-	}
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  WiFi.setSleep(false);
 
-	String url = extractJsonStringField(body, "url");
-	String md5 = extractJsonStringField(body, "md5");
+  Serial.print("Dang ket noi WiFi");
 
-	if (url.isEmpty()) {
-		publishOtaStatus("error", 0, "Payload OTA thieu truong url");
-		return;
-	}
+  const unsigned long startTime = millis();
+  const unsigned long timeoutMs = 30000UL;
 
-	performOTA(url, md5);
+  while (WiFi.status() != WL_CONNECTED) {
+    if (millis() - startTime >= timeoutMs) {
+      Serial.println();
+      Serial.println("Ket noi WiFi that bai");
+      return false;
+    }
+
+    Serial.print(".");
+    delay(500);
+  }
+
+  Serial.println();
+  Serial.println("Ket noi WiFi thanh cong");
+  Serial.print("Dia chi IP: ");
+  Serial.println(WiFi.localIP());
+
+  return true;
+}
+
+void pauseHeavyTasks() {
+  Serial.println("Tam dung tac vu nang truoc OTA");
+
+  turnOffLED();
+  turnOffBuzzer();
+
+  esp_camera_deinit();
+
+  Serial.println("Da tam dung camera truoc OTA");
+}
+
+void resumeHeavyTasks() {
+  Serial.println("Khoi phuc tac vu sau OTA that bai");
+
+  initCamera();
+
+  Serial.println("Da khoi phuc camera");
+}
+
+void mqttCallback(char *topic, byte *payload, unsigned int length) {
+  String topicStr = String(topic);
+
+  Serial.print("MQTT callback topic: ");
+  Serial.println(topicStr);
+
+  if (topicStr == OTA_COMMAND_TOPIC) {
+    otaHandleMqttMessage(topic, payload, length);
+    return;
+  }
+
+  receiveCommand(topic, payload, length);
+}
+
+bool connectMQTT() {
+  if (mqttClient.connected()) {
+    return true;
+  }
+
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("Khong the ket noi MQTT vi WiFi dang mat");
+    return false;
+  }
+
+  mqttClient.setServer(MQTT_SERVER, MQTT_PORT);
+  mqttClient.setCallback(mqttCallback);
+  mqttClient.setBufferSize(1024);
+
+  otaInit(&mqttClient);
+  otaSetTaskControlCallbacks(pauseHeavyTasks, resumeHeavyTasks);
+
+  const uint64_t chipId = ESP.getEfuseMac();
+
+  char clientId[50];
+  snprintf(
+    clientId,
+    sizeof(clientId),
+    "ESP32S3_CAM_%08X%08X",
+    (uint32_t)(chipId >> 32),
+    (uint32_t)chipId
+  );
+
+  Serial.print("Dang ket noi MQTT...");
+
+  if (!mqttClient.connect(clientId)) {
+    Serial.print("THAT BAI, ma loi = ");
+    Serial.println(mqttClient.state());
+    return false;
+  }
+
+  Serial.println("THANH CONG");
+
+  if (mqttClient.subscribe(COMMAND_TOPIC)) {
+    Serial.println("Da subscribe topic dieu khien");
+  } else {
+    Serial.println("Subscribe topic dieu khien that bai");
+  }
+
+  if (mqttClient.subscribe(OTA_COMMAND_TOPIC)) {
+    Serial.println("Da subscribe topic OTA");
+  } else {
+    Serial.println("Subscribe topic OTA that bai");
+  }
+
+  const bool sent = mqttClient.publish(
+    MOTION_TOPIC,
+    "{\"device\":\"esp32s3_cam\",\"status\":\"online\"}",
+    true
+  );
+
+  Serial.println(sent ? "Da gui trang thai online" : "Gui trang thai online that bai");
+
+  return true;
+}
+
+void reconnectMQTT() {
+  static unsigned long lastReconnectTime = 0;
+  const unsigned long reconnectIntervalMs = 5000UL;
+
+  if (WiFi.status() != WL_CONNECTED) {
+    connectWiFi();
+  }
+
+  if (!mqttClient.connected()) {
+    if (millis() - lastReconnectTime >= reconnectIntervalMs) {
+      lastReconnectTime = millis();
+      connectMQTT();
+    }
+
+    return;
+  }
+
+  mqttClient.loop();
+}
+
+bool detectMotion() {
+  return digitalRead(PIR_PIN) == HIGH;
+}
+
+camera_fb_t *captureImage() {
+  Serial.println("DANG CHUP ANH...");
+
+  camera_fb_t *frameBuffer = esp_camera_fb_get();
+
+  if (frameBuffer == nullptr) {
+    Serial.println("LOI: KHONG CHUP DUOC ANH");
+    return nullptr;
+  }
+
+  Serial.printf(
+    "CHUP ANH THANH CONG - KICH THUOC: %u BYTES\n",
+    (unsigned int)frameBuffer->len
+  );
+
+  Serial.printf(
+    "DO PHAN GIAI: %d x %d\n",
+    frameBuffer->width,
+    frameBuffer->height
+  );
+
+  return frameBuffer;
+}
+
+bool sendImage(camera_fb_t *frameBuffer) {
+  if (frameBuffer == nullptr) {
+    return false;
+  }
+
+  if (!mqttClient.connected()) {
+    Serial.println("Khong gui duoc thong tin anh vi MQTT dang mat");
+    return false;
+  }
+
+  const String imageUrl = "http://" + WiFi.localIP().toString() + "/capture";
+
+  char cameraMessage[300];
+
+  snprintf(
+    cameraMessage,
+    sizeof(cameraMessage),
+    "{\"captured\":true,\"size\":%u,\"width\":%d,\"height\":%d,\"image_url\":\"%s\"}",
+    (unsigned int)frameBuffer->len,
+    frameBuffer->width,
+    frameBuffer->height,
+    imageUrl.c_str()
+  );
+
+  const bool sent = mqttClient.publish(CAMERA_TOPIC, cameraMessage);
+
+  if (sent) {
+    Serial.println("Da gui thong tin anh qua MQTT");
+    Serial.print("Dia chi anh: ");
+    Serial.println(imageUrl);
+  } else {
+    Serial.println("Gui thong tin anh that bai");
+  }
+
+  return sent;
+}
+
+void publishMotionStatus(bool status) {
+  if (!mqttClient.connected()) {
+    Serial.println("Khong gui duoc trang thai PIR vi MQTT dang mat");
+    return;
+  }
+
+  const char *message = status ? "{\"motion\":true}" : "{\"motion\":false}";
+
+  const bool sent = mqttClient.publish(MOTION_TOPIC, message);
+
+  if (sent) {
+    Serial.print("Da gui trang thai chuyen dong: ");
+    Serial.println(status ? "true" : "false");
+  } else {
+    Serial.println("Gui trang thai chuyen dong that bai");
+  }
+}
+
+void turnOnLED() {
+  digitalWrite(LED_PIN, HIGH);
+  ledState = true;
+
+  Serial.println("LED DA BAT");
+}
+
+void turnOffLED() {
+  digitalWrite(LED_PIN, LOW);
+  ledState = false;
+
+  Serial.println("LED DA TAT");
+}
+
+void turnOnBuzzer() {
+  digitalWrite(BUZZER_PIN, HIGH);
+  buzzerState = true;
+
+  Serial.println("BUZZER DA BAT");
+}
+
+void turnOffBuzzer() {
+  digitalWrite(BUZZER_PIN, LOW);
+  buzzerState = false;
+
+  Serial.println("BUZZER DA TAT");
+}
+
+void receiveCommand(char *topic, byte *payload, unsigned int length) {
+  receivedCommand = "";
+
+  for (unsigned int i = 0; i < length; i++) {
+    receivedCommand += static_cast<char>(payload[i]);
+  }
+
+  receivedCommand.trim();
+
+  Serial.print("Nhan MQTT [");
+  Serial.print(topic);
+  Serial.print("]: ");
+  Serial.println(receivedCommand);
+
+  executeCommand(receivedCommand);
+}
+
+void executeCommand(const String &command) {
+  Serial.print("DANG XU LY LENH: ");
+  Serial.println(command);
+
+  if (command == "LED_ON") {
+    turnOnLED();
+
+  } else if (command == "LED_OFF") {
+    turnOffLED();
+
+  } else if (command == "BUZZER_ON") {
+    turnOnBuzzer();
+
+  } else if (command == "BUZZER_OFF") {
+    turnOffBuzzer();
+
+  } else if (command == "ALARM_ON") {
+    turnOnLED();
+    turnOnBuzzer();
+
+  } else if (command == "ALARM_OFF") {
+    turnOffLED();
+    turnOffBuzzer();
+
+  } else if (command == "TEST") {
+    Serial.println("ESP32 DA NHAN DUOC LENH TEST");
+
+  } else {
+    Serial.print("LENH KHONG HOP LE: ");
+    Serial.println(command);
+  }
+}
+
+void startCameraWebServer() {
+  startCameraServer();
+
+  Serial.print("Camera Ready! Use 'http://");
+  Serial.print(WiFi.localIP());
+  Serial.println("' to connect");
 }

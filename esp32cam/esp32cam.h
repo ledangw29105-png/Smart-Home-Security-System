@@ -1,16 +1,25 @@
 #pragma once
 
-#include <stdint.h>
+#include <Arduino.h>
+#include "esp_camera.h"
 
-class String;
-class PubSubClient;
+void initHardware();
+bool initCamera();
+bool connectWiFi();
+bool connectMQTT();
+void reconnectMQTT();
 
-extern const char *OTA_COMMAND_TOPIC;
-extern const char *OTA_STATUS_TOPIC;
+bool detectMotion();
+camera_fb_t *captureImage();
+bool sendImage(camera_fb_t *frameBuffer);
+void publishMotionStatus(bool status);
 
-typedef void (*OtaTaskCallback)();
+void turnOnBuzzer();
+void turnOffBuzzer();
+void turnOnLED();
+void turnOffLED();
 
-void otaInit(PubSubClient *mqttClient);
-void otaSetTaskControlCallbacks(OtaTaskCallback onPause, OtaTaskCallback onResume);
-void otaHandleMqttMessage(const char *topic, const uint8_t *payload, unsigned int length);
-bool performOTA(const String &fileUrl, const String &expectedMd5 = "");
+void receiveCommand(char *topic, byte *payload, unsigned int length);
+void executeCommand(const String &command);
+
+void startCameraWebServer();
