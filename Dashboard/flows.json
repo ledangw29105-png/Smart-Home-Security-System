@@ -1,1 +1,486 @@
-
+[
+    {
+        "id": "456047d00104c731",
+        "type": "tab",
+        "label": "Flow 1",
+        "disabled": false,
+        "info": "",
+        "env": []
+    },
+    {
+        "id": "ca85aa7894c6ea2e",
+        "type": "mqtt-broker",
+        "name": "Mosquitto Local",
+        "broker": "localhost",
+        "port": 1883,
+        "clientid": "",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": 4,
+        "keepalive": 60,
+        "cleansession": true,
+        "autoUnsubscribe": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthRetain": "false",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closeQos": "0",
+        "closeRetain": "false",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willRetain": "false",
+        "willPayload": "",
+        "willMsg": {},
+        "userProps": "",
+        "sessionExpiry": ""
+    },
+    {
+        "id": "67114e049aaca9eb",
+        "type": "ui_tab",
+        "name": "Home",
+        "icon": "dashboard",
+        "disabled": false,
+        "hidden": false
+    },
+    {
+        "id": "3c19f153ed798703",
+        "type": "ui_base",
+        "theme": {
+            "name": "theme-light",
+            "lightTheme": {
+                "default": "#0094CE",
+                "baseColor": "#0094CE",
+                "baseFont": "-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Oxygen-Sans,Ubuntu,Cantarell,Helvetica Neue,sans-serif",
+                "edited": false
+            },
+            "darkTheme": {
+                "default": "#097479",
+                "baseColor": "#097479",
+                "baseFont": "-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Oxygen-Sans,Ubuntu,Cantarell,Helvetica Neue,sans-serif",
+                "edited": false
+            },
+            "customTheme": {
+                "name": "Untitled Theme 1",
+                "default": "#4B7930",
+                "baseColor": "#4B7930",
+                "baseFont": "-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Oxygen-Sans,Ubuntu,Cantarell,Helvetica Neue,sans-serif"
+            },
+            "themeState": {
+                "base-color": {
+                    "default": "#0094CE",
+                    "value": "#0094CE",
+                    "edited": false
+                },
+                "page-titlebar-backgroundColor": {
+                    "value": "#0094CE",
+                    "edited": false
+                },
+                "page-backgroundColor": {
+                    "value": "#fafafa",
+                    "edited": false
+                },
+                "page-sidebar-backgroundColor": {
+                    "value": "#ffffff",
+                    "edited": false
+                },
+                "group-textColor": {
+                    "value": "#1bbfff",
+                    "edited": false
+                },
+                "group-borderColor": {
+                    "value": "#ffffff",
+                    "edited": false
+                },
+                "group-backgroundColor": {
+                    "value": "#ffffff",
+                    "edited": false
+                },
+                "widget-textColor": {
+                    "value": "#111111",
+                    "edited": false
+                },
+                "widget-backgroundColor": {
+                    "value": "#0094ce",
+                    "edited": false
+                },
+                "widget-borderColor": {
+                    "value": "#ffffff",
+                    "edited": false
+                },
+                "base-font": {
+                    "value": "-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Oxygen-Sans,Ubuntu,Cantarell,Helvetica Neue,sans-serif"
+                }
+            },
+            "angularTheme": {
+                "primary": "indigo",
+                "accents": "blue",
+                "warn": "red",
+                "background": "grey",
+                "palette": "light"
+            }
+        },
+        "site": {
+            "name": "Node-RED Dashboard",
+            "hideToolbar": "false",
+            "allowSwipe": "false",
+            "lockMenu": "false",
+            "allowTempTheme": "true",
+            "dateFormat": "DD/MM/YYYY",
+            "sizes": {
+                "sx": 48,
+                "sy": 48,
+                "gx": 6,
+                "gy": 6,
+                "cx": 6,
+                "cy": 6,
+                "px": 0,
+                "py": 0
+            }
+        }
+    },
+    {
+        "id": "608fb20562f4d524",
+        "type": "ui_group",
+        "name": "Cảnh Báo",
+        "tab": "67114e049aaca9eb",
+        "order": 1,
+        "disp": true,
+        "width": 6,
+        "collapse": false,
+        "className": ""
+    },
+    {
+        "id": "be8561115e59096c",
+        "type": "mqtt in",
+        "z": "456047d00104c731",
+        "name": "",
+        "topic": "esp32cam/motion/alert",
+        "qos": "0",
+        "datatype": "auto-detect",
+        "broker": "ca85aa7894c6ea2e",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 400,
+        "y": 220,
+        "wires": [
+            [
+                "bcacc8f93e98ed82"
+            ]
+        ]
+    },
+    {
+        "id": "bcacc8f93e98ed82",
+        "type": "ui_text",
+        "z": "456047d00104c731",
+        "group": "608fb20562f4d524",
+        "order": 0,
+        "width": 0,
+        "height": 0,
+        "name": "",
+        "label": "Trạng thái chuyển động",
+        "format": "{{msg.payload}}",
+        "layout": "row-spread",
+        "className": "",
+        "style": false,
+        "font": "",
+        "fontSize": 16,
+        "color": "#000000",
+        "x": 710,
+        "y": 220,
+        "wires": []
+    },
+    {
+        "id": "d04a39d8322f2a38",
+        "type": "mqtt in",
+        "z": "456047d00104c731",
+        "name": "",
+        "topic": " esp32cam/status",
+        "qos": "0",
+        "datatype": "auto-detect",
+        "broker": "ca85aa7894c6ea2e",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 380,
+        "y": 280,
+        "wires": [
+            [
+                "58180383ad2a8f8f"
+            ]
+        ]
+    },
+    {
+        "id": "58180383ad2a8f8f",
+        "type": "ui_text",
+        "z": "456047d00104c731",
+        "group": "608fb20562f4d524",
+        "order": 0,
+        "width": 0,
+        "height": 0,
+        "name": "",
+        "label": "Trạng thái thiết bị",
+        "format": "{{msg.payload}}",
+        "layout": "row-spread",
+        "className": "",
+        "style": false,
+        "font": "",
+        "fontSize": 16,
+        "color": "#000000",
+        "x": 710,
+        "y": 280,
+        "wires": []
+    },
+    {
+        "id": "94ad455f4169433c",
+        "type": "ui_button",
+        "z": "456047d00104c731",
+        "name": "",
+        "group": "608fb20562f4d524",
+        "order": 1,
+        "width": 0,
+        "height": 0,
+        "passthru": false,
+        "label": "Tắt còi",
+        "tooltip": "",
+        "color": "",
+        "bgcolor": "",
+        "className": "",
+        "icon": "",
+        "payload": "OFF",
+        "payloadType": "str",
+        "topic": "topic",
+        "topicType": "msg",
+        "x": 310,
+        "y": 520,
+        "wires": [
+            [
+                "cbea4bda83e1fc88"
+            ]
+        ]
+    },
+    {
+        "id": "cbea4bda83e1fc88",
+        "type": "mqtt out",
+        "z": "456047d00104c731",
+        "name": "",
+        "topic": "esp32cam/cmd/buzzer_off",
+        "qos": "0",
+        "retain": "",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "ca85aa7894c6ea2e",
+        "x": 580,
+        "y": 520,
+        "wires": []
+    },
+    {
+        "id": "256cd141c957c968",
+        "type": "mqtt out",
+        "z": "456047d00104c731",
+        "name": "",
+        "topic": "esp32cam/cmd/check_status",
+        "qos": "0",
+        "retain": "",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "ca85aa7894c6ea2e",
+        "x": 640,
+        "y": 600,
+        "wires": []
+    },
+    {
+        "id": "a431b3854984e0fc",
+        "type": "ui_button",
+        "z": "456047d00104c731",
+        "name": "",
+        "group": "608fb20562f4d524",
+        "order": 0,
+        "width": 0,
+        "height": 0,
+        "passthru": false,
+        "label": "Kiểm tra hệ thống",
+        "tooltip": "",
+        "color": "",
+        "bgcolor": "",
+        "className": "",
+        "icon": "",
+        "payload": "CHECK",
+        "payloadType": "str",
+        "topic": "topic",
+        "topicType": "msg",
+        "x": 350,
+        "y": 600,
+        "wires": [
+            [
+                "256cd141c957c968"
+            ]
+        ]
+    },
+    {
+        "id": "89d249544b152451",
+        "type": "mqtt in",
+        "z": "456047d00104c731",
+        "name": "",
+        "topic": "esp32cam/recognition/status",
+        "qos": "0",
+        "datatype": "auto-detect",
+        "broker": "ca85aa7894c6ea2e",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 420,
+        "y": 160,
+        "wires": [
+            [
+                "f35d8f3003d39c37"
+            ]
+        ]
+    },
+    {
+        "id": "efad09c668f89e3b",
+        "type": "mqtt in",
+        "z": "456047d00104c731",
+        "name": "",
+        "topic": "esp32cam/warning/status",
+        "qos": "0",
+        "datatype": "auto-detect",
+        "broker": "ca85aa7894c6ea2e",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 410,
+        "y": 80,
+        "wires": [
+            [
+                "ad2118fbc28f3d82"
+            ]
+        ]
+    },
+    {
+        "id": "ad2118fbc28f3d82",
+        "type": "ui_text",
+        "z": "456047d00104c731",
+        "group": "608fb20562f4d524",
+        "order": 2,
+        "width": 0,
+        "height": 0,
+        "name": "",
+        "label": "Trạng thái cảnh báo",
+        "format": "{{msg.payload}}",
+        "layout": "row-spread",
+        "className": "",
+        "style": false,
+        "font": "",
+        "fontSize": 16,
+        "color": "#000000",
+        "x": 720,
+        "y": 80,
+        "wires": []
+    },
+    {
+        "id": "f35d8f3003d39c37",
+        "type": "ui_text",
+        "z": "456047d00104c731",
+        "group": "608fb20562f4d524",
+        "order": 3,
+        "width": 0,
+        "height": 0,
+        "name": "",
+        "label": "Nhận diện khuôn mặt",
+        "format": "{{msg.payload}}",
+        "layout": "row-spread",
+        "className": "",
+        "style": false,
+        "font": "",
+        "fontSize": 16,
+        "color": "#000000",
+        "x": 720,
+        "y": 160,
+        "wires": []
+    },
+    {
+        "id": "4d6c69eb9ec0f7a9",
+        "type": "mqtt in",
+        "z": "456047d00104c731",
+        "name": "",
+        "topic": "esp32cam/battery",
+        "qos": "0",
+        "datatype": "auto-detect",
+        "broker": "ca85aa7894c6ea2e",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 390,
+        "y": 380,
+        "wires": [
+            [
+                "68c7120b5a5cc26c"
+            ]
+        ]
+    },
+    {
+        "id": "68c7120b5a5cc26c",
+        "type": "function",
+        "z": "456047d00104c731",
+        "name": "function 1",
+        "func": "msg.payload = parseInt(msg.payload);\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 560,
+        "y": 380,
+        "wires": [
+            [
+                "e010e857989e9f25"
+            ]
+        ]
+    },
+    {
+        "id": "e010e857989e9f25",
+        "type": "ui_template",
+        "z": "456047d00104c731",
+        "group": "608fb20562f4d524",
+        "name": "Pin",
+        "order": 6,
+        "width": 0,
+        "height": 0,
+        "format": "<div class=\"battery-card\">\n    <div class=\"battery-header\">Dung lượng pin <span class=\"battery-value\">{{msg.payload}}%</span></div>\n    <div class=\"battery-indicator\">\n        <div class=\"battery-cap\"></div>\n        <div class=\"battery-body\">\n            <div class=\"battery-fill\"\n                ng-style=\"{'height': msg.payload + '%', 'background-color': (msg.payload <= 20) ? '#ff4d4d' : (msg.payload <= 50 ? '#ffc107' : '#28a745')}\">\n            </div>\n        </div>\n    </div>\n</div>\n\n<style>\n    /* Tổng thể khối pin */\n    .battery-card {\n        padding: 15px;\n        text-align: center;\n        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;\n    }\n\n    /* Tiêu đề chữ Đen, bao gồm cả % */\n    .battery-header {\n        font-size: 16px;\n        color: #000000;\n        /* Đổi màu toàn bộ dòng chữ sang ĐEN */\n        margin-bottom: 15px;\n        font-weight: 500;\n    }\n\n    .battery-value {\n        font-weight: bold;\n        color: #000000;\n        /* Phần % cũng ĐEN */\n    }\n\n    /* Bố cục cục pin đứng */\n    .battery-indicator {\n        display: flex;\n        flex-direction: column;\n        align-items: center;\n        justify-content: flex-end;\n        position: relative;\n    }\n\n    /* Đầu cực dương (Square top) */\n    .battery-cap {\n        width: 14px;\n        height: 8px;\n        background-color: #333;\n        border-radius: 4px 4px 0 0;\n        margin-bottom: -1px;\n        /* Đặt lén lên thân pin */\n        z-index: 1;\n    }\n\n    /* Thân cục pin */\n    .battery-body {\n        width: 50px;\n        height: 100px;\n        border: 4px solid #333;\n        border-radius: 0 0 10px 10px;\n        /* Chỉ bo góc đáy */\n        overflow: hidden;\n        /* Giữ phần fill bên trong */\n        background-color: rgba(200, 200, 200, 0.2);\n        display: flex;\n        justify-content: center;\n        align-items: flex-end;\n        /* Đổ đầy từ dưới lên */\n    }\n\n    /* Thanh năng lượng bên trong co giãn theo msg.payload */\n    .battery-fill {\n        width: 100%;\n        border-radius: 0 0 5px 5px;\n        /* Bo đáy nhẹ */\n        transition: height 0.5s ease-in-out, background-color 0.5s ease;\n        max-height: 100%;\n    }\n</style>",
+        "storeOutMessages": true,
+        "fwdInMessages": true,
+        "resendOnRefresh": true,
+        "templateScope": "local",
+        "className": "",
+        "x": 730,
+        "y": 380,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "9907c161b8b8747c",
+        "type": "global-config",
+        "env": [],
+        "modules": {
+            "node-red-dashboard": "3.6.6"
+        }
+    }
+]
