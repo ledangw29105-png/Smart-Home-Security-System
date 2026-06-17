@@ -1,5 +1,6 @@
 import os
 import json
+import urllib.request
 from datetime import datetime
 
 import paho.mqtt.client as mqtt
@@ -8,67 +9,170 @@ from image_processor import process_image
 from risk_evaluator import evaluate_risk
 
 
-# Lấy đường dẫn thư mục hiện tại: .../Smart-Home-Security-System/ai
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# =========================
+# PATH CONFIG
+# =========================
 
-# Ảnh nhận từ MQTT sẽ được lưu vào ai/captured_images
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CAPTURE_DIR = os.path.join(BASE_DIR, "captured_images")
 
 
-# Nếu MQTT Broker chạy trên chính laptop này thì để localhost
-MQTT_BROKER = "localhost"
+# =========================
+# MQTT CONFIG
+# =========================
+
+# Dùng MQTT Broker public để mô phỏng cloud
+MQTT_BROKER = "test.mosquitto.org"
 MQTT_PORT = 1883
 
-# Topic ESP32-CAM gửi ảnh lên
-IMAGE_TOPIC = "home/camera/image"
+# ESP32-CAM publish thông tin ảnh lên topic này
+IMAGE_TOPIC = "smart_home/ledangw29105/camera"
 
-# Topic AI gửi kết quả nhận diện cho dashboard
-AI_RESULT_TOPIC = "home/ai/result"
+# AI publish kết quả nhận diện lên topic này cho dashboard
+AI_RESULT_TOPIC = "smart_home/ledangw29105/ai_result"
 
-# Topic gửi lệnh cảnh báo về ESP32-CAM
-ALARM_TOPIC = "home/device/alarm"
+# AI gửi lệnh điều khiển về ESP32-CAM qua topic command
+COMMAND_TOPIC = "smart_home/ledangw29105/command"
 
 
-def save_image_from_mqtt(payload):
+# =========================
+# IMAGE FUNCTIONS
+# =========================
+
+def parse_camera_message(payload):
     """
-    Nhận dữ liệu ảnh dạng bytes từ MQTT và lưu thành file .jpg
+    Nhận payload MQTT dạng JSON từ ESP32-CAM.
+
+    ESP32 gửi dạng ví dụ:
+    {
+        "captured": true,
+        "size": 12345,
+        "width": 320,
+        "height": 240,
+        "image_url": "http://192.168.x.x/capture"
+    }
+    """
+
+    message = payload.decode("utf-8")
+    data = json.loads(message)
+
+    if "image_url" not in data:
+        raise ValueError("Payload MQTT không có trường image_url")
+
+    return data
+
+
+def download_image_from_url(image_url):
+    """
+    Tải ảnh từ ESP32-CAM thông qua URL /capture
+    rồi lưu vào thư mục ai/captured_images.
     """
 
     os.makedirs(CAPTURE_DIR, exist_ok=True)
 
-    file_name = datetime.now().strftime("mqtt_%Y%m%d_%H%M%S.jpg")
+    file_name = datetime.now().strftime("esp32_%Y%m%d_%H%M%S.jpg")
     image_path = os.path.join(CAPTURE_DIR, file_name)
 
+    print("Đang tải ảnh từ ESP32-CAM:", image_url)
+
+    with urllib.request.urlopen(image_url, timeout=10) as response:
+        image_data = response.read()
+
+    if len(image_data) == 0:
+        raise ValueError("Ảnh tải về bị rỗng")
+
     with open(image_path, "wb") as f:
-        f.write(payload)
+        f.write(image_data)
 
     return image_path
 
 
+# =========================
+# MQTT CALLBACKS
+# =========================
+
 def on_connect(client, userdata, flags, rc):
     if rc == 0:
-        print("Đã kết nối MQTT Broker")
+        print("Đã kết nối MQTT Broker:", MQTT_BROKER)
         client.subscribe(IMAGE_TOPIC)
-        print(f"Đang lắng nghe ảnh từ topic: {IMAGE_TOPIC}")
+        print("Đang lắng nghe topic:", IMAGE_TOPIC)
     else:
         print("Kết nối MQTT thất bại, mã lỗi:", rc)
 
 
+def on_disconnect(client, userdata, rc):
+    print("Mất kết nối MQTT, mã lỗi:", rc)
+
+
+def publish_ai_result(client, result):
+    """
+    Gửi kết quả AI lên MQTT cho dashboard.
+    """
+
+    payload = json.dumps(result, ensure_ascii=False)
+
+    client.publish(
+        AI_RESULT_TOPIC,
+        payload,
+        retain=False
+    )
+
+    print("Đã publish kết quả AI lên:", AI_RESULT_TOPIC)
+
+
+def publish_alarm_command(client, danger_level):
+    """
+    Gửi lệnh điều khiển dạng text về ESP32-CAM.
+
+    ESP32 hiểu các lệnh:
+    - ALARM_ON
+    - ALARM_OFF
+    """
+
+    if danger_level >= 3:
+        command = "ALARM_ON"
+    else:
+        command = "ALARM_OFF"
+
+    client.publish(
+        COMMAND_TOPIC,
+        command,
+        retain=False
+    )
+
+    print("Đã gửi lệnh về ESP32:", command)
+
+
 def on_message(client, userdata, msg):
-    print(f"Nhận dữ liệu từ topic: {msg.topic}")
+    print("\n==============================")
+    print("Nhận dữ liệu từ topic:", msg.topic)
 
     if msg.topic != IMAGE_TOPIC:
+        print("Topic không đúng, bỏ qua")
         return
 
     try:
-        # 1. Lưu ảnh nhận từ ESP32-CAM
-        image_path = save_image_from_mqtt(msg.payload)
-        print("Đã lưu ảnh:", image_path)
+        # 1. Đọc JSON từ ESP32-CAM
+        camera_data = parse_camera_message(msg.payload)
+        print("Dữ liệu camera:", camera_data)
 
-        # 2. Gọi AI xử lý ảnh
+        # 2. Lấy image_url
+        image_url = camera_data["image_url"]
+
+        # 3. Tải ảnh từ ESP32-CAM
+        image_path = download_image_from_url(image_url)
+        print("Đã tải ảnh:", image_path)
+
+        # 4. Gọi AI xử lý ảnh
         result = process_image(image_path)
         print("Kết quả AI:", result)
 
+        # 5. Lưu thêm thông tin ảnh gốc vào kết quả
+        result["camera_data"] = camera_data
+        result["image_url"] = image_url
+        result["captured_image_path"] = image_path
+
+        # 6. Đánh giá mức độ nguy hiểm
         risk = evaluate_risk(
             ai_result=result,
             motion_detected=True,
@@ -82,74 +186,63 @@ def on_message(client, userdata, msg):
 
         print("Mức độ nguy hiểm:", risk)
 
-        # 3. Gửi kết quả AI lên MQTT cho dashboard
-        client.publish(
-            AI_RESULT_TOPIC,
-            json.dumps(result, ensure_ascii=False),
-            retain=False
-        )
+        # 7. Gửi kết quả AI cho dashboard
+        publish_ai_result(client, result)
 
-        # 4. Nếu phát hiện người lạ thì gửi lệnh bật còi/LED
-        if result["danger_level"] >= 3:
-            alarm_payload = {
-                "alarm": result["alarm"],
-                "danger_level": result["danger_level"],
-                "risk_label": result["risk_label"],
-                "message": result["risk_message"]
-            }
-
-            client.publish(
-                ALARM_TOPIC,
-                json.dumps(alarm_payload, ensure_ascii=False),
-                retain=False
-            )
-
-            print("Đã gửi lệnh cảnh báo:", alarm_payload)
-
-        else:
-            alarm_payload = {
-                "alarm": "off",
-                "danger_level": result["danger_level"],
-                "risk_label": result["risk_label"],
-                "message": result["risk_message"]
-            }
-
-            client.publish(
-                ALARM_TOPIC,
-                json.dumps(alarm_payload, ensure_ascii=False),
-                retain=False
-            )
-
-            print("Không cần bật cảnh báo:", alarm_payload)
-
-            
+        # 8. Gửi lệnh ALARM_ON / ALARM_OFF về ESP32
+        publish_alarm_command(client, result["danger_level"])
 
     except Exception as e:
+        print("Lỗi xử lý ảnh:", e)
+
         error_result = {
             "status": "error",
             "message": str(e),
             "alert": False,
-            "people": []
+            "people": [],
+            "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
 
-        client.publish(
-            AI_RESULT_TOPIC,
-            json.dumps(error_result, ensure_ascii=False),
-            retain=False
-        )
+        publish_ai_result(client, error_result)
 
-        print("Lỗi xử lý ảnh:", e)
+        # Khi lỗi thì tạm thời không bật còi để tránh báo động sai
+        client.publish(COMMAND_TOPIC, "ALARM_OFF", retain=False)
+        print("Đã gửi lệnh về ESP32: ALARM_OFF")
+
+
+# =========================
+# MAIN
+# =========================
+
+def create_mqtt_client():
+    """
+    Tạo MQTT client.
+    Dùng CallbackAPIVersion.VERSION1 để tránh warning của paho-mqtt bản mới.
+    Nếu máy dùng bản cũ thì tự fallback về mqtt.Client().
+    """
+
+    try:
+        client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1)
+    except AttributeError:
+        client = mqtt.Client()
+
+    return client
 
 
 def main():
-    client = mqtt.Client()
+    client = create_mqtt_client()
 
     client.on_connect = on_connect
+    client.on_disconnect = on_disconnect
     client.on_message = on_message
 
     print("Đang kết nối MQTT Broker...")
+    print("Broker:", MQTT_BROKER)
+    print("Port:", MQTT_PORT)
+
     client.connect(MQTT_BROKER, MQTT_PORT, 60)
 
+    print("Đang chạy AI MQTT Service...")
     client.loop_forever()
 
 
