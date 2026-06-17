@@ -4,8 +4,10 @@ import face_recognition
 from datetime import datetime
 from ai_recognition import recognize_faces
 
-CAPTURE_DIR = "captured_images"
-PROCESSED_DIR = "processed_images"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+CAPTURE_DIR = os.path.join(BASE_DIR, "captured_images")
+PROCESSED_DIR = os.path.join(BASE_DIR, "processed_images")
 
 
 def process_image(image_path, tolerance=0.5):
